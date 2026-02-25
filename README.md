@@ -129,3 +129,4 @@ In dev mode, the application automatically seeds:
 - **5 tickets** across different rooms
 - **9 sessions** across the weekly schedule
 - **3 users** (admin, tech, staff)
+# Green-Campus
