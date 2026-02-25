@@ -1,0 +1,84 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================
+   GreenCampus Design System — Green / White / Black
+   ============================================ */
+
+:root {
+  --gc-green-50: #f0fdf4;
+  --gc-green-100: #dcfce7;
+  --gc-green-200: #bbf7d0;
+  --gc-green-300: #86efac;
+  --gc-green-400: #4ade80;
+  --gc-green-500: #22c55e;
+  --gc-green-600: #16a34a;
+  --gc-green-700: #15803d;
+  --gc-green-800: #166534;
+  --gc-green-900: #14532d;
+  --gc-green-950: #052e16;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Sidebar active link */
+.sidebar-link {
+  @apply flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200;
+}
+.sidebar-link:hover {
+  @apply bg-campus-50 text-campus-700;
+}
+.sidebar-link.active {
+  @apply bg-campus-500 text-white shadow-md shadow-campus-500/25;
+}
+
+/* KPI Card Animation */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-fade-in-up {
+  animation: fadeInUp 0.5s ease-out forwards;
+}
+
+/* Pulse dot for health status */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+.pulse-dot {
+  animation: pulse-dot 2s ease-in-out infinite;
+}

@@ -1,0 +1,55 @@
+version: '3.9'
+
+services:
+  # ─── PostgreSQL ───────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: gc-postgres
+    environment:
+      POSTGRES_DB: greencampus
+      POSTGRES_USER: greencampus
+      POSTGRES_PASSWORD: greencampus
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U greencampus" ]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # ─── Backend (Spring Boot) ────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: gc-backend
+    ports:
+      - "8080:8080"
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: greencampus
+      DB_USER: greencampus
+      DB_PASS: greencampus
+      SPRING_PROFILES_ACTIVE: default
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # ─── Frontend (React + Vite) ──────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: gc-frontend
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_API_PROXY_TARGET: http://backend:8080
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:
