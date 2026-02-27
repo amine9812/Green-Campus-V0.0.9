@@ -2,6 +2,8 @@ import { useState, useMemo, useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { fetchRooms } from '../api/client'
+import { getCurrentUser } from '../lib/auth'
+import { canManageRooms } from '../lib/permissions'
 import type { RoomType, RoomStatus, RoomSearchParams, RoomListItem } from '../types/room'
 import AddRoomModal from '../components/AddRoomModal'
 import {
@@ -20,6 +22,8 @@ function useDebounce<T>(value: T, delay: number): T {
 
 function RoomsPage() {
     const navigate = useNavigate()
+    const currentUser = getCurrentUser()
+    const canCreateRoom = canManageRooms(currentUser)
     const [searchText, setSearchText] = useState('')
     const [typeFilter, setTypeFilter] = useState<RoomType | ''>('')
     const [statusFilter, setStatusFilter] = useState<RoomStatus | ''>('')
@@ -58,14 +62,19 @@ function RoomsPage() {
                     <p className="text-sm text-gray-500 mt-1">
                         Browse and manage campus rooms, labs, and amphitheatres.
                     </p>
+                    {!canCreateRoom && (
+                        <p className="text-xs text-amber-700 mt-1">Read-only access for your role.</p>
+                    )}
                 </div>
-                <button
-                    onClick={() => setAddModalOpen(true)}
-                    className="inline-flex items-center gap-2 px-4 py-2.5 bg-campus-500 text-white text-sm font-medium rounded-lg hover:bg-campus-600 transition-colors shadow-sm shadow-campus-500/20"
-                >
-                    <Plus className="w-4 h-4" />
-                    Add Room
-                </button>
+                {canCreateRoom && (
+                    <button
+                        onClick={() => setAddModalOpen(true)}
+                        className="inline-flex items-center gap-2 px-4 py-2.5 bg-campus-500 text-white text-sm font-medium rounded-lg hover:bg-campus-600 transition-colors shadow-sm shadow-campus-500/20"
+                    >
+                        <Plus className="w-4 h-4" />
+                        Add Room
+                    </button>
+                )}
             </div>
 
             {/* Search + Filters */}
@@ -178,7 +187,7 @@ function RoomsPage() {
             )}
 
             {/* Add Room Modal */}
-            <AddRoomModal open={addModalOpen} onClose={() => setAddModalOpen(false)} />
+            {canCreateRoom && <AddRoomModal open={addModalOpen} onClose={() => setAddModalOpen(false)} />}
         </div>
     )
 }

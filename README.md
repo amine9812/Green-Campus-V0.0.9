@@ -34,6 +34,8 @@ A campus room management system built with **Spring Boot 3.4** (backend) and **R
 ### 1. Start Backend (H2 dev mode)
 ```bash
 cd backend
+export GROQ_API_KEY=[REDACTED]
+export GROQ_MODEL_NAME=llama3-8b-8192   # optional
 SPRING_PROFILES_ACTIVE=dev ./mvnw spring-boot:run
 ```
 Backend starts on **http://localhost:8080**.
@@ -81,6 +83,38 @@ Navigate to `http://localhost:5173/login` and use one of the demo accounts:
 | GET | `/api/absences/free-rooms` | Free room suggestions |
 | POST | `/api/auth/login` | Login (returns JWT) |
 | GET | `/api/auth/me` | Validate token |
+| POST | `/api/chat` | Context-only assistant response |
+
+## Chatbot Configuration
+
+The in-app assistant uses Groq Chat Completions and only answers from internal GreenCampus data.
+
+Required environment variable:
+```bash
+export GROQ_API_KEY=[REDACTED]
+```
+
+Optional model override:
+```bash
+export GROQ_MODEL_NAME=llama3-8b-8192
+```
+
+If data is missing from the system context, the assistant returns:
+`Information not available in the system.`
+
+## Testing
+
+Backend:
+```bash
+cd backend
+./mvnw test
+```
+
+Frontend:
+```bash
+cd frontend
+npm run test
+```
 
 ## Production Database
 

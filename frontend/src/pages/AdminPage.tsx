@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { fetchRooms, deleteRoom, fetchStats, fetchHealth, clearRoomSessions } from '../api/client'
+import { fetchRooms, deleteRoom, fetchStats, fetchHealth, clearRoomSessions, fetchAuditLogs } from '../api/client'
+import { getCurrentUser } from '../lib/auth'
+import type { AuditLogEntry } from '../types/audit'
 import type { RoomListItem } from '../types/room'
 import {
     Settings, DoorOpen, Users, Activity, Trash2, ExternalLink,
@@ -24,6 +26,11 @@ export default function AdminPage() {
     const { data: health } = useQuery({
         queryKey: ['health'],
         queryFn: fetchHealth,
+    })
+
+    const { data: auditLogs = [], isLoading: auditLoading } = useQuery({
+        queryKey: ['auditLogs'],
+        queryFn: () => fetchAuditLogs(),
     })
 
     const deleteMut = useMutation({
@@ -50,11 +57,8 @@ export default function AdminPage() {
     }
 
     // User data from localStorage
-    const currentUser = (() => {
-        try { return JSON.parse(localStorage.getItem('gc_user') || '{}') } catch { return {} }
-    })()
-
-    const userRole = currentUser.role || 'UNKNOWN'
+    const currentUser = getCurrentUser()
+    const userRole = currentUser?.role || 'UNKNOWN'
     const isAdmin = userRole === 'ADMIN'
 
     return (
@@ -201,6 +205,43 @@ export default function AdminPage() {
                     </table>
                 </div>
             </div>
+
+            {/* Audit Logs */}
+            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-2">
+                    <Activity className="w-4 h-4 text-gray-700" />
+                    <h3 className="text-sm font-bold text-gray-900">Audit Log</h3>
+                    <span className="text-xs text-gray-400 ml-auto">{auditLogs.length} entries</span>
+                </div>
+                {auditLoading ? (
+                    <div className="flex items-center justify-center py-8">
+                        <Loader2 className="w-5 h-5 animate-spin text-campus-500" />
+                    </div>
+                ) : auditLogs.length === 0 ? (
+                    <div className="px-5 py-8 text-sm text-gray-400 text-center">
+                        No audit entries yet
+                    </div>
+                ) : (
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                            <thead>
+                                <tr className="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                                    <th className="px-5 py-3">Time</th>
+                                    <th className="px-5 py-3">Actor</th>
+                                    <th className="px-5 py-3">Action</th>
+                                    <th className="px-5 py-3">Entity</th>
+                                    <th className="px-5 py-3">Summary</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                                {auditLogs.slice(0, 50).map((log) => (
+                                    <AuditLogRow key={log.id} log={log} />
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+            </div>
         </div>
     )
 }
@@ -226,5 +267,39 @@ function HealthBar({ value }: { value: number }) {
             </div>
             <span className="text-xs text-gray-500 font-medium">{value}%</span>
         </div>
+    )
+}
+
+function AuditLogRow({ log }: { log: AuditLogEntry }) {
+    return (
+        <tr className="hover:bg-gray-50 transition-colors">
+            <td className="px-5 py-3 text-xs text-gray-500 whitespace-nowrap">
+                {new Date(log.eventTimestamp).toLocaleString()}
+            </td>
+            <td className="px-5 py-3">
+                <div className="flex items-center gap-2">
+                    <span className="font-mono text-xs text-gray-800">{log.actorUsername}</span>
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-50 text-purple-700">
+                        {log.actorRole}
+                    </span>
+                </div>
+            </td>
+            <td className="px-5 py-3">
+                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${log.actionType === 'DELETE'
+                    ? 'bg-red-50 text-red-700'
+                    : log.actionType === 'CREATE'
+                        ? 'bg-campus-50 text-campus-700'
+                        : 'bg-gray-100 text-gray-700'
+                    }`}>
+                    {log.actionType}
+                </span>
+            </td>
+            <td className="px-5 py-3 text-xs text-gray-700">
+                {log.entityType}#{log.entityId ?? '—'}
+            </td>
+            <td className="px-5 py-3 text-xs text-gray-600 max-w-[480px] truncate" title={log.summary ?? ''}>
+                {log.summary || '—'}
+            </td>
+        </tr>
     )
 }

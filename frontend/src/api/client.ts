@@ -1,4 +1,8 @@
 import axios from 'axios'
+import { getAuthToken } from '../lib/auth'
+import type { LoginResponse, MeResponse } from '../types/auth'
+import type { AuditLogEntry } from '../types/audit'
+import type { ChatRequest, ChatResponse } from '../types/chat'
 import type {
     RoomListItem, RoomDetail, RoomSearchParams, RoomCreatePayload,
     AssetItem, AssetStatus, Ticket, TicketCreatePayload, TicketPriority, TicketStatus,
@@ -14,12 +18,30 @@ const api = axios.create({
 
 // Request interceptor: attach JWT if present
 api.interceptors.request.use((config) => {
-    const token = localStorage.getItem('gc_token')
+    const token = getAuthToken()
     if (token) {
         config.headers.Authorization = `Bearer ${token}`
     }
     return config
 })
+
+api.interceptors.response.use(
+    (response) => response,
+    (error) => {
+        const status = error?.response?.status
+        if (typeof window !== 'undefined' && (status === 401 || status === 403)) {
+            const message =
+                error?.response?.data?.error ||
+                (status === 403 ? 'You are not allowed to perform this action.' : 'Please sign in again.')
+            window.dispatchEvent(
+                new CustomEvent('gc-api-error', {
+                    detail: { status, message },
+                })
+            )
+        }
+        return Promise.reject(error)
+    }
+)
 
 export default api
 
@@ -129,13 +151,34 @@ export const fetchFreeRooms = async (day: DayOfWeek, start: string, end: string)
 }
 
 // ---------- Auth ----------
-export const login = async (username: string, password: string): Promise<{ token: string; role: string; displayName: string }> => {
+export const login = async (username: string, password: string): Promise<LoginResponse> => {
     const { data } = await api.post('/auth/login', { username, password })
+    return data
+}
+
+export const fetchMe = async (): Promise<MeResponse> => {
+    const { data } = await api.get('/auth/me')
+    return data
+}
+
+// ---------- Audit Logs ----------
+export const fetchAuditLogs = async (params?: {
+    from?: string
+    to?: string
+    entityType?: string
+}): Promise<AuditLogEntry[]> => {
+    const { data } = await api.get('/audit-log', { params })
     return data
 }
 
 // ---------- Stats ----------
 export const fetchStats = async (): Promise<{ totalRooms: number; openTickets: number; brokenPcs: number; totalSessions: number }> => {
     const { data } = await api.get('/stats')
+    return data
+}
+
+// ---------- Chat ----------
+export const sendChatMessage = async (payload: ChatRequest): Promise<ChatResponse> => {
+    const { data } = await api.post('/chat', payload)
     return data
 }

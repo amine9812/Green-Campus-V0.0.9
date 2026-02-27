@@ -3,10 +3,11 @@ import { Monitor, MonitorX, Projector, Laptop, SquareStack } from 'lucide-react'
 
 interface RoomLayoutProps {
     room: RoomDetail
-    onToggleAsset: (asset: AssetItem) => void
+    onToggleAsset?: (asset: AssetItem) => void
+    readOnly?: boolean
 }
 
-export default function RoomLayout({ room, onToggleAsset }: RoomLayoutProps) {
+export default function RoomLayout({ room, onToggleAsset, readOnly = false }: RoomLayoutProps) {
     const projector = room.assets.find(a => a.type === 'PROJECTOR')
     const teacherPc = room.assets.find(a => a.type === 'TEACHER_PC')
     const tablePcs = room.assets
@@ -28,7 +29,8 @@ export default function RoomLayout({ room, onToggleAsset }: RoomLayoutProps) {
                         icon={<Projector className="w-4 h-4" />}
                         label="Projector"
                         status={projector.status}
-                        onClick={() => onToggleAsset(projector)}
+                        onClick={onToggleAsset ? () => onToggleAsset(projector) : undefined}
+                        readOnly={readOnly}
                     />
                 )}
                 {/* Teacher PC */}
@@ -37,7 +39,8 @@ export default function RoomLayout({ room, onToggleAsset }: RoomLayoutProps) {
                         icon={<Laptop className="w-4 h-4" />}
                         label="Teacher PC"
                         status={teacherPc.status}
-                        onClick={() => onToggleAsset(teacherPc)}
+                        onClick={onToggleAsset ? () => onToggleAsset(teacherPc) : undefined}
+                        readOnly={readOnly}
                     />
                 )}
             </div>
@@ -54,7 +57,13 @@ export default function RoomLayout({ room, onToggleAsset }: RoomLayoutProps) {
                     }}
                 >
                     {tablePcs.map((pc, i) => (
-                        <TableCell key={pc.id} pc={pc} index={i + 1} onClick={() => onToggleAsset(pc)} />
+                        <TableCell
+                            key={pc.id}
+                            pc={pc}
+                            index={i + 1}
+                            onClick={onToggleAsset ? () => onToggleAsset(pc) : undefined}
+                            readOnly={readOnly}
+                        />
                     ))}
                 </div>
             ) : tableCount > 0 ? (
@@ -78,7 +87,9 @@ export default function RoomLayout({ room, onToggleAsset }: RoomLayoutProps) {
             <div className="flex items-center justify-center gap-4 pt-2 border-t border-gray-100">
                 <LegendItem color="bg-campus-400" label="Working" />
                 <LegendItem color="bg-red-400" label="Broken" />
-                <span className="text-[10px] text-gray-400 italic">Click a PC to toggle status</span>
+                <span className="text-[10px] text-gray-400 italic">
+                    {readOnly ? 'Read-only layout view' : 'Click a PC to toggle status'}
+                </span>
             </div>
         </div>
     )
@@ -86,16 +97,18 @@ export default function RoomLayout({ room, onToggleAsset }: RoomLayoutProps) {
 
 // ──────── Sub-components ────────
 
-function TableCell({ pc, index, onClick }: { pc: AssetItem; index: number; onClick: () => void }) {
+function TableCell({ pc, index, onClick, readOnly = false }: { pc: AssetItem; index: number; onClick?: () => void; readOnly?: boolean }) {
     const working = pc.status === 'WORKING'
     return (
         <button
+            type="button"
             onClick={onClick}
+            disabled={readOnly}
             className={`group relative aspect-[3/2] rounded-lg border-2 flex flex-col items-center justify-center transition-all duration-200 cursor-pointer hover:shadow-lg hover:scale-[1.03] ${working
                     ? 'border-campus-200 bg-campus-50/60 hover:border-campus-400'
                     : 'border-red-200 bg-red-50/60 hover:border-red-400'
-                }`}
-            title={`${pc.label} — ${pc.status} (click to toggle)`}
+                } ${readOnly ? 'cursor-default hover:shadow-none hover:scale-100 opacity-90' : ''}`}
+            title={readOnly ? `${pc.label} — ${pc.status}` : `${pc.label} — ${pc.status} (click to toggle)`}
         >
             {/* Status dot */}
             <div className={`absolute top-1.5 right-1.5 w-2 h-2 rounded-full ${working ? 'bg-campus-400' : 'bg-red-400'} ${working ? '' : 'animate-pulse'}`} />
@@ -109,21 +122,24 @@ function TableCell({ pc, index, onClick }: { pc: AssetItem; index: number; onCli
     )
 }
 
-function EquipmentBadge({ icon, label, status, onClick }: {
+function EquipmentBadge({ icon, label, status, onClick, readOnly = false }: {
     icon: React.ReactNode
     label: string
     status: AssetStatus
-    onClick: () => void
+    onClick?: () => void
+    readOnly?: boolean
 }) {
     const working = status === 'WORKING'
     return (
         <button
+            type="button"
             onClick={onClick}
+            disabled={readOnly}
             className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg border-2 transition-all hover:shadow-md cursor-pointer ${working
                     ? 'border-campus-200 bg-campus-50/50 text-campus-700 hover:border-campus-400'
                     : 'border-red-200 bg-red-50/50 text-red-700 hover:border-red-400'
-                }`}
-            title={`${label}: ${status} (click to toggle)`}
+                } ${readOnly ? 'cursor-default hover:shadow-none opacity-90' : ''}`}
+            title={readOnly ? `${label}: ${status}` : `${label}: ${status} (click to toggle)`}
         >
             {icon}
             <span className="text-xs font-semibold">{label}</span>

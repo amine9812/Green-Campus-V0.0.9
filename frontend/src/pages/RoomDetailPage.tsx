@@ -1,6 +1,10 @@
+import { useMemo, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { fetchRoomById, deleteRoom, updateAssetStatus } from '../api/client'
+import { getCurrentUser } from '../lib/auth'
+import { canManageAssets, canManageRooms } from '../lib/permissions'
+import AddRoomModal from '../components/AddRoomModal'
 import RoomLayout from '../components/RoomLayout'
 import type { AssetItem, AssetStatus } from '../types/room'
 import {
@@ -18,6 +22,11 @@ export default function RoomDetailPage() {
     const navigate = useNavigate()
     const queryClient = useQueryClient()
     const roomId = Number(id)
+    const currentUser = getCurrentUser()
+    const canEditRoom = canManageRooms(currentUser)
+    const canEditAssets = canManageAssets(currentUser)
+    const [showEditModal, setShowEditModal] = useState(false)
+    const [pageError, setPageError] = useState<string | null>(null)
 
     const { data: room, isLoading, isError } = useQuery({
         queryKey: ['room', roomId],
@@ -31,6 +40,7 @@ export default function RoomDetailPage() {
             queryClient.invalidateQueries({ queryKey: ['rooms'] })
             navigate('/rooms')
         },
+        onError: (err: any) => setPageError(err?.response?.data?.error || 'Failed to delete room'),
     })
 
     const toggleAssetStatus = useMutation({
@@ -40,7 +50,23 @@ export default function RoomDetailPage() {
             queryClient.invalidateQueries({ queryKey: ['room', roomId] })
             queryClient.invalidateQueries({ queryKey: ['rooms'] })
         },
+        onError: (err: any) => setPageError(err?.response?.data?.error || 'Failed to update asset status'),
     })
+
+    const roomFormInitial = useMemo(() => {
+        if (!room) return null
+        return {
+            code: room.code,
+            type: room.type,
+            capacity: room.capacity,
+            status: room.status,
+            totalTables: room.totalTables,
+            tablesHavePcs: room.tablesHavePcs,
+            notes: room.notes ?? '',
+            projectorStatus: room.projectorStatus ?? undefined,
+            teacherPcStatus: room.teacherPcStatus ?? undefined,
+        }
+    }, [room])
 
     if (isLoading) {
         return (
@@ -68,14 +94,21 @@ export default function RoomDetailPage() {
     const projector = room.assets.find(a => a.type === 'PROJECTOR')
     const teacherPc = room.assets.find(a => a.type === 'TEACHER_PC')
     const tablePcs = room.assets.filter(a => a.type === 'TABLE_PC').sort((a, b) => (a.tableIndex ?? 0) - (b.tableIndex ?? 0))
-
     const handleToggle = (asset: AssetItem) => {
+        if (!canEditAssets) return
+        setPageError(null)
         const newStatus: AssetStatus = asset.status === 'WORKING' ? 'BROKEN' : 'WORKING'
         toggleAssetStatus.mutate({ assetId: asset.id, status: newStatus })
     }
 
     return (
-        <div className="space-y-6">
+        <>
+            <div className="space-y-6">
+            {pageError && (
+                <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                    {pageError}
+                </div>
+            )}
             {/* Header */}
             <div className="flex items-start justify-between">
                 <div className="flex items-center gap-4">
@@ -97,22 +130,27 @@ export default function RoomDetailPage() {
                             </span>
                         </div>
                         {room.notes && <p className="text-sm text-gray-500 mt-1">{room.notes}</p>}
+                        {!canEditRoom && (
+                            <p className="text-xs text-amber-700 mt-1">Read-only access for your role.</p>
+                        )}
                     </div>
                 </div>
-                <div className="flex items-center gap-2">
-                    <button
-                        onClick={() => {/* TODO BOX 2 extension: edit modal */ }}
-                        className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-                    >
-                        <Edit className="w-4 h-4" /> Edit
-                    </button>
-                    <button
-                        onClick={() => { if (confirm('Delete this room?')) deleteMut.mutate() }}
-                        className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
-                    >
-                        <Trash2 className="w-4 h-4" /> Delete
-                    </button>
-                </div>
+                {canEditRoom && (
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => { setPageError(null); setShowEditModal(true) }}
+                            className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                        >
+                            <Edit className="w-4 h-4" /> Edit
+                        </button>
+                        <button
+                            onClick={() => { setPageError(null); if (confirm('Delete this room?')) deleteMut.mutate() }}
+                            className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
+                        >
+                            <Trash2 className="w-4 h-4" /> Delete
+                        </button>
+                    </div>
+                )}
             </div>
 
             {/* Summary Cards */}
@@ -153,10 +191,11 @@ export default function RoomDetailPage() {
                                     <button
                                         key={pc.id}
                                         onClick={() => handleToggle(pc)}
+                                        disabled={!canEditAssets}
                                         className={`p-3 rounded-lg border-2 text-center transition-all hover:shadow-md cursor-pointer ${pc.status === 'WORKING'
                                             ? 'border-campus-200 bg-campus-50/50 hover:border-campus-400'
                                             : 'border-red-200 bg-red-50/50 hover:border-red-400'
-                                            }`}
+                                            } ${!canEditAssets ? 'cursor-default hover:shadow-none opacity-90' : ''}`}
                                     >
                                         <div className="flex items-center justify-center mb-1">
                                             {pc.status === 'WORKING'
@@ -177,6 +216,9 @@ export default function RoomDetailPage() {
                     {tablePcs.length === 0 && room.tablesHavePcs && (
                         <p className="text-sm text-gray-400 italic">Table PCs not yet initialized.</p>
                     )}
+                    {!canEditAssets && (
+                        <p className="text-xs text-amber-700">Asset health is read-only for non-admin roles.</p>
+                    )}
                 </div>
             </div>
 
@@ -186,7 +228,7 @@ export default function RoomDetailPage() {
                     <h3 className="text-sm font-semibold text-gray-900">Room Layout</h3>
                 </div>
                 <div className="p-5">
-                    <RoomLayout room={room} onToggleAsset={handleToggle} />
+                    <RoomLayout room={room} onToggleAsset={canEditAssets ? handleToggle : undefined} readOnly={!canEditAssets} />
                 </div>
             </div>
 
@@ -197,7 +239,17 @@ export default function RoomDetailPage() {
                     <p className="text-sm text-gray-400">Tickets coming in BOX 4</p>
                 </div>
             </div>
-        </div>
+            </div>
+            {canEditRoom && (
+                <AddRoomModal
+                    open={showEditModal}
+                    onClose={() => setShowEditModal(false)}
+                    mode="edit"
+                    roomId={roomId}
+                    initialValue={roomFormInitial ?? undefined}
+                />
+            )}
+        </>
     )
 }
 
@@ -215,6 +267,7 @@ function SummaryCard({ icon, label, value, color }: { icon: React.ReactNode; lab
 
 function AssetToggleCard({ asset, onToggle, icon }: { asset: AssetItem; onToggle: (a: AssetItem) => void; icon: React.ReactNode }) {
     const isWorking = asset.status === 'WORKING'
+    const canEditAssets = canManageAssets(getCurrentUser())
     return (
         <div className={`flex items-center justify-between p-4 rounded-xl border-2 transition-all ${isWorking ? 'border-campus-200 bg-campus-50/30' : 'border-red-200 bg-red-50/30'
             }`}>
@@ -229,10 +282,11 @@ function AssetToggleCard({ asset, onToggle, icon }: { asset: AssetItem; onToggle
             </div>
             <button
                 onClick={() => onToggle(asset)}
+                disabled={!canEditAssets}
                 className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${isWorking
                     ? 'bg-red-100 text-red-700 hover:bg-red-200'
                     : 'bg-campus-100 text-campus-700 hover:bg-campus-200'
-                    }`}
+                    } ${!canEditAssets ? 'opacity-60 cursor-default' : ''}`}
             >
                 {isWorking ? 'Mark Broken' : 'Mark Working'}
             </button>

@@ -1,44 +1,57 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { createRoom } from '../api/client'
+import { createRoom, updateRoom } from '../api/client'
 import type { RoomType, RoomStatus, RoomCreatePayload } from '../types/room'
 import { X, Loader2 } from 'lucide-react'
 
 interface Props {
     open: boolean
     onClose: () => void
+    mode?: 'create' | 'edit'
+    roomId?: number
+    initialValue?: Partial<RoomCreatePayload>
 }
 
-export default function AddRoomModal({ open, onClose }: Props) {
+const defaultRoomForm: RoomCreatePayload = {
+    code: '',
+    type: 'CLASS',
+    capacity: 30,
+    status: 'OPEN',
+    totalTables: 0,
+    tablesHavePcs: false,
+    notes: '',
+}
+
+export default function AddRoomModal({ open, onClose, mode = 'create', roomId, initialValue }: Props) {
     const queryClient = useQueryClient()
-    const [form, setForm] = useState<RoomCreatePayload>({
-        code: '',
-        type: 'CLASS',
-        capacity: 30,
-        status: 'OPEN',
-        totalTables: 0,
-        tablesHavePcs: false,
-        notes: '',
-    })
+    const [form, setForm] = useState<RoomCreatePayload>({ ...defaultRoomForm })
     const [error, setError] = useState<string | null>(null)
 
+    useEffect(() => {
+        if (!open) return
+        setForm({ ...defaultRoomForm, ...initialValue })
+        setError(null)
+    }, [open, initialValue])
+
     const mutation = useMutation({
-        mutationFn: createRoom,
+        mutationFn: (payload: RoomCreatePayload) =>
+            mode === 'edit' && roomId ? updateRoom(roomId, payload) : createRoom(payload),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['rooms'] })
+            if (roomId) {
+                queryClient.invalidateQueries({ queryKey: ['room', roomId] })
+            }
             onClose()
             resetForm()
         },
         onError: (err: any) => {
-            setError(err?.response?.data?.message || err?.message || 'Failed to create room')
+            setError(err?.response?.data?.error || err?.response?.data?.message || err?.message ||
+                (mode === 'edit' ? 'Failed to update room' : 'Failed to create room'))
         },
     })
 
     const resetForm = () => {
-        setForm({
-            code: '', type: 'CLASS', capacity: 30, status: 'OPEN',
-            totalTables: 0, tablesHavePcs: false, notes: '',
-        })
+        setForm({ ...defaultRoomForm, ...initialValue })
         setError(null)
     }
 
@@ -63,7 +76,9 @@ export default function AddRoomModal({ open, onClose }: Props) {
             <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden animate-fade-in-up">
                 {/* Header */}
                 <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-                    <h3 className="text-lg font-bold text-gray-900">Add New Room</h3>
+                    <h3 className="text-lg font-bold text-gray-900">
+                        {mode === 'edit' ? 'Edit Room' : 'Add New Room'}
+                    </h3>
                     <button onClick={onClose} className="p-1 rounded-lg hover:bg-gray-100 transition-colors">
                         <X className="w-5 h-5 text-gray-500" />
                     </button>
@@ -168,7 +183,7 @@ export default function AddRoomModal({ open, onClose }: Props) {
                             className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-campus-500 rounded-lg hover:bg-campus-600 transition-colors disabled:opacity-60 shadow-sm shadow-campus-500/20"
                         >
                             {mutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
-                            Create Room
+                            {mode === 'edit' ? 'Save Changes' : 'Create Room'}
                         </button>
                     </div>
                 </form>

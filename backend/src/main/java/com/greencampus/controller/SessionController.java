@@ -1,6 +1,9 @@
 package com.greencampus.controller;
 
 import com.greencampus.dto.SessionDTO;
+import com.greencampus.model.enums.UserRole;
+import com.greencampus.security.AuthContext;
+import com.greencampus.security.AuthenticatedUser;
 import com.greencampus.service.SessionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -17,18 +20,45 @@ public class SessionController {
 
     private final SessionService sessionService;
 
+    private boolean isAdmin(String auth) {
+        AuthenticatedUser user = AuthContext.fromAuthorizationHeader(auth);
+        return user != null && user.role() == UserRole.ADMIN;
+    }
+
     @GetMapping
-    public List<SessionDTO> getAll() {
-        return sessionService.getAllSessions();
+    public ResponseEntity<?> getAll(@RequestHeader(value = "Authorization", required = false) String auth) {
+        if (!isAdmin(auth)) {
+            AuthenticatedUser user = AuthContext.fromAuthorizationHeader(auth);
+            return user == null
+                    ? ResponseEntity.status(401).body(Map.of("error", "Not authenticated"))
+                    : ResponseEntity.status(403).body(Map.of("error", "Admin access required"));
+        }
+        return ResponseEntity.ok(sessionService.getAllSessions());
     }
 
     @GetMapping("/room/{roomId}")
-    public List<SessionDTO> getByRoom(@PathVariable Long roomId) {
-        return sessionService.getSessionsByRoom(roomId);
+    public ResponseEntity<?> getByRoom(
+            @PathVariable Long roomId,
+            @RequestHeader(value = "Authorization", required = false) String auth) {
+        if (!isAdmin(auth)) {
+            AuthenticatedUser user = AuthContext.fromAuthorizationHeader(auth);
+            return user == null
+                    ? ResponseEntity.status(401).body(Map.of("error", "Not authenticated"))
+                    : ResponseEntity.status(403).body(Map.of("error", "Admin access required"));
+        }
+        return ResponseEntity.ok(sessionService.getSessionsByRoom(roomId));
     }
 
     @PostMapping("/import")
-    public ResponseEntity<Map<String, Object>> importCsv(@RequestParam("file") MultipartFile file) {
+    public ResponseEntity<?> importCsv(
+            @RequestParam("file") MultipartFile file,
+            @RequestHeader(value = "Authorization", required = false) String auth) {
+        if (!isAdmin(auth)) {
+            AuthenticatedUser user = AuthContext.fromAuthorizationHeader(auth);
+            return user == null
+                    ? ResponseEntity.status(401).body(Map.of("error", "Not authenticated"))
+                    : ResponseEntity.status(403).body(Map.of("error", "Admin access required"));
+        }
         try {
             int count = sessionService.importCsv(file.getInputStream());
             return ResponseEntity.ok(Map.of("imported", count, "status", "ok"));
@@ -38,13 +68,27 @@ public class SessionController {
     }
 
     @DeleteMapping("/room/{roomId}")
-    public ResponseEntity<Void> clearRoom(@PathVariable Long roomId) {
+    public ResponseEntity<?> clearRoom(
+            @PathVariable Long roomId,
+            @RequestHeader(value = "Authorization", required = false) String auth) {
+        if (!isAdmin(auth)) {
+            AuthenticatedUser user = AuthContext.fromAuthorizationHeader(auth);
+            return user == null
+                    ? ResponseEntity.status(401).body(Map.of("error", "Not authenticated"))
+                    : ResponseEntity.status(403).body(Map.of("error", "Admin access required"));
+        }
         sessionService.clearRoomSessions(roomId);
         return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/occupancy")
-    public ResponseEntity<Map<String, Long>> occupancy() {
+    public ResponseEntity<?> occupancy(@RequestHeader(value = "Authorization", required = false) String auth) {
+        if (!isAdmin(auth)) {
+            AuthenticatedUser user = AuthContext.fromAuthorizationHeader(auth);
+            return user == null
+                    ? ResponseEntity.status(401).body(Map.of("error", "Not authenticated"))
+                    : ResponseEntity.status(403).body(Map.of("error", "Admin access required"));
+        }
         return ResponseEntity.ok(Map.of("occupiedRooms", sessionService.countOccupiedNow()));
     }
 }

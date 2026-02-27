@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { login } from '../api/client'
+import { setAuthSession } from '../lib/auth'
 import { Leaf, Loader2, LogIn } from 'lucide-react'
 
 export default function LoginPage() {
@@ -16,10 +17,11 @@ export default function LoginPage() {
         setLoading(true)
         try {
             const res = await login(username, password)
-            localStorage.setItem('gc_token', res.token)
-            localStorage.setItem('gc_user', JSON.stringify({
-                username, role: res.role, displayName: res.displayName,
-            }))
+            setAuthSession(res.token, {
+                username: res.username,
+                role: res.role,
+                displayName: res.displayName,
+            })
             navigate('/')
         } catch {
             setError('Invalid username or password')

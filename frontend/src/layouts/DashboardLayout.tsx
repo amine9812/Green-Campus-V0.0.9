@@ -1,6 +1,10 @@
+import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { fetchHealth } from '../api/client'
+import { clearAuthSession, getCurrentUser } from '../lib/auth'
+import { canAccessAdmin, canAccessSchedule } from '../lib/permissions'
+import ChatWidget from '../components/ChatWidget'
 import {
     LayoutDashboard,
     DoorOpen,
@@ -15,12 +19,18 @@ const navItems = [
     { to: '/', icon: LayoutDashboard, label: 'Overview' },
     { to: '/rooms', icon: DoorOpen, label: 'Rooms' },
     { to: '/tickets', icon: Ticket, label: 'Tickets' },
-    { to: '/schedule', icon: Calendar, label: 'Schedule' },
-    { to: '/admin', icon: Settings, label: 'Admin' },
+    { to: '/schedule', icon: Calendar, label: 'Schedule', adminOnly: true },
+    { to: '/admin', icon: Settings, label: 'Admin', adminOnly: true },
 ]
 
 function DashboardLayout() {
     const location = useLocation()
+    const currentUser = getCurrentUser()
+    const [apiToast, setApiToast] = useState<string | null>(null)
+    const visibleNavItems = navItems.filter((item) => {
+        if (!item.adminOnly) return true
+        return item.to === '/admin' ? canAccessAdmin(currentUser) : canAccessSchedule(currentUser)
+    })
 
     const { data: health } = useQuery({
         queryKey: ['health'],
@@ -29,6 +39,21 @@ function DashboardLayout() {
     })
 
     const isHealthy = health?.status === 'ok'
+
+    useEffect(() => {
+        const onApiError = (event: Event) => {
+            const custom = event as CustomEvent<{ message?: string }>
+            setApiToast(custom.detail?.message || 'Request failed')
+        }
+        window.addEventListener('gc-api-error', onApiError as EventListener)
+        return () => window.removeEventListener('gc-api-error', onApiError as EventListener)
+    }, [])
+
+    useEffect(() => {
+        if (!apiToast) return
+        const timer = setTimeout(() => setApiToast(null), 3500)
+        return () => clearTimeout(timer)
+    }, [apiToast])
 
     // Get current page title
     const currentPage = navItems.find(
@@ -58,7 +83,7 @@ function DashboardLayout() {
 
                 {/* Navigation */}
                 <nav className="flex-1 px-3 py-4 space-y-1">
-                    {navItems.map((item) => {
+                    {visibleNavItems.map((item) => {
                         const Icon = item.icon
                         return (
                             <NavLink
@@ -107,25 +132,19 @@ function DashboardLayout() {
                         <div className="flex items-center gap-2">
                             <div className="w-8 h-8 rounded-full bg-campus-100 flex items-center justify-center">
                                 <span className="text-xs font-bold text-campus-700">
-                                    {(() => {
-                                        try { const u = JSON.parse(localStorage.getItem('gc_user') || '{}'); return (u.displayName || 'GC').slice(0, 2).toUpperCase(); } catch { return 'GC'; }
-                                    })()}
+                                    {(currentUser?.displayName || 'GC').slice(0, 2).toUpperCase()}
                                 </span>
                             </div>
                             <div className="hidden sm:block">
                                 <p className="text-sm font-medium text-gray-900 leading-tight">
-                                    {(() => {
-                                        try { return JSON.parse(localStorage.getItem('gc_user') || '{}').displayName || 'Guest'; } catch { return 'Guest'; }
-                                    })()}
+                                    {currentUser?.displayName || 'Guest'}
                                 </p>
                                 <p className="text-[10px] text-gray-500">
-                                    {(() => {
-                                        try { return JSON.parse(localStorage.getItem('gc_user') || '{}').role || ''; } catch { return ''; }
-                                    })()}
+                                    {currentUser?.role || ''}
                                 </p>
                             </div>
                             <button
-                                onClick={() => { localStorage.removeItem('gc_token'); localStorage.removeItem('gc_user'); window.location.href = '/login'; }}
+                                onClick={() => { clearAuthSession(); window.location.href = '/login'; }}
                                 className="ml-2 text-xs text-gray-400 hover:text-red-500 transition-colors font-medium"
                                 title="Logout"
                             >
@@ -137,9 +156,15 @@ function DashboardLayout() {
 
                 {/* Page Content */}
                 <main className="flex-1 overflow-y-auto p-6">
+                    {apiToast && (
+                        <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 shadow-sm">
+                            {apiToast}
+                        </div>
+                    )}
                     <Outlet />
                 </main>
             </div>
+            <ChatWidget />
         </div>
     )
 }

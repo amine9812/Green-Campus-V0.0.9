@@ -3,6 +3,7 @@ package com.greencampus.model;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+
 import java.time.LocalDateTime;
 
 @Entity
@@ -15,30 +16,49 @@ public class AuditLog {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, length = 50)
-    private String action; // DELETE, CREATE, UPDATE
+    @Column(name = "event_timestamp", nullable = false)
+    private LocalDateTime eventTimestamp;
+
+    @Column(name = "actor_user_id")
+    private Long actorUserId;
+
+    @Column(name = "actor_username", nullable = false, length = 100)
+    private String actorUsername;
+
+    @Column(name = "actor_role", nullable = false, length = 50)
+    private String actorRole;
+
+    @Column(name = "action_type", nullable = false, length = 50)
+    private String actionType; // DELETE, CREATE, UPDATE
 
     @Column(name = "entity_type", nullable = false, length = 50)
-    private String entityType; // ROOM, TICKET, ABSENCE
+    private String entityType; // ROOM, TICKET, ASSET...
 
     @Column(name = "entity_id")
     private Long entityId;
 
-    @Column(length = 500)
-    private String details;
+    @Column(name = "summary", length = 500)
+    private String summary;
 
-    @Column(name = "performed_by", nullable = false, length = 100)
-    private String performedBy;
+    @Lob
+    @Column(name = "before_json")
+    private String beforeJson;
 
-    @Column(name = "performed_at", nullable = false)
-    private LocalDateTime performedAt;
+    @Lob
+    @Column(name = "after_json")
+    private String afterJson;
 
-    public AuditLog(String action, String entityType, Long entityId, String details, String performedBy) {
-        this.action = action;
+    public AuditLog(String actionType, String entityType, Long entityId, String summary,
+            Long actorUserId, String actorUsername, String actorRole, String beforeJson, String afterJson) {
+        this.actionType = actionType;
         this.entityType = entityType;
         this.entityId = entityId;
-        this.details = details;
-        this.performedBy = performedBy;
-        this.performedAt = LocalDateTime.now();
+        this.summary = summary;
+        this.actorUserId = actorUserId;
+        this.actorUsername = actorUsername;
+        this.actorRole = actorRole;
+        this.beforeJson = beforeJson;
+        this.afterJson = afterJson;
+        this.eventTimestamp = LocalDateTime.now();
     }
 }

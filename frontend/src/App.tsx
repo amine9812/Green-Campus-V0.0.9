@@ -1,6 +1,8 @@
 import { Routes, Route } from 'react-router-dom'
 import DashboardLayout from './layouts/DashboardLayout'
 import AuthGuard from './components/AuthGuard'
+import RoleGuard from './components/RoleGuard'
+import RoomDetailErrorBoundary from './components/RoomDetailErrorBoundary'
 import OverviewPage from './pages/OverviewPage'
 import RoomsPage from './pages/RoomsPage'
 import RoomDetailPage from './pages/RoomDetailPage'
@@ -17,10 +19,31 @@ function App() {
                 <Route path="/" element={<DashboardLayout />}>
                     <Route index element={<OverviewPage />} />
                     <Route path="rooms" element={<RoomsPage />} />
-                    <Route path="rooms/:id" element={<RoomDetailPage />} />
+                    <Route
+                        path="rooms/:id"
+                        element={
+                            <RoomDetailErrorBoundary>
+                                <RoomDetailPage />
+                            </RoomDetailErrorBoundary>
+                        }
+                    />
                     <Route path="tickets" element={<TicketsPage />} />
-                    <Route path="schedule" element={<SchedulePage />} />
-                    <Route path="admin" element={<AdminPage />} />
+                    <Route
+                        path="schedule"
+                        element={
+                            <RoleGuard feature="schedule">
+                                <SchedulePage />
+                            </RoleGuard>
+                        }
+                    />
+                    <Route
+                        path="admin"
+                        element={
+                            <RoleGuard feature="admin">
+                                <AdminPage />
+                            </RoleGuard>
+                        }
+                    />
                 </Route>
             </Route>
         </Routes>

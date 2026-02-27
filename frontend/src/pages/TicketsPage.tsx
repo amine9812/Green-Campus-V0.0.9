@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { fetchTickets, fetchRooms, createTicket, updateTicketStatus as apiUpdateStatus, deleteTicket as apiDeleteTicket } from '../api/client'
+import { getCurrentUser } from '../lib/auth'
+import { canCreateTicket, canDeleteTicket, canEditTicket } from '../lib/permissions'
 import type { Ticket, TicketPriority, TicketStatus, TicketCreatePayload, RoomListItem } from '../types/room'
 import {
     TicketPlus, Search, Filter, Loader2, AlertTriangle,
@@ -26,9 +28,14 @@ const statusLabel: Record<TicketStatus, string> = {
 
 export default function TicketsPage() {
     const queryClient = useQueryClient()
+    const currentUser = getCurrentUser()
+    const canCreate = canCreateTicket(currentUser)
+    const canEdit = canEditTicket(currentUser)
+    const canDelete = canDeleteTicket(currentUser)
     const [statusFilter, setStatusFilter] = useState<TicketStatus | ''>('')
     const [priorityFilter, setPriorityFilter] = useState<TicketPriority | ''>('')
     const [showCreate, setShowCreate] = useState(false)
+    const [pageError, setPageError] = useState<string | null>(null)
 
     const { data: tickets = [], isLoading } = useQuery({
         queryKey: ['tickets', statusFilter, priorityFilter],
@@ -44,6 +51,7 @@ export default function TicketsPage() {
             queryClient.invalidateQueries({ queryKey: ['tickets'] })
             queryClient.invalidateQueries({ queryKey: ['rooms'] })
         },
+        onError: (err: any) => setPageError(err?.response?.data?.error || 'Failed to update ticket'),
     })
 
     const deleteMut = useMutation({
@@ -52,6 +60,7 @@ export default function TicketsPage() {
             queryClient.invalidateQueries({ queryKey: ['tickets'] })
             queryClient.invalidateQueries({ queryKey: ['rooms'] })
         },
+        onError: (err: any) => setPageError(err?.response?.data?.error || 'Failed to delete ticket'),
     })
 
     return (
@@ -61,14 +70,29 @@ export default function TicketsPage() {
                 <div>
                     <h2 className="text-2xl font-bold text-gray-900">Tickets</h2>
                     <p className="text-sm text-gray-500 mt-1">{tickets.length} ticket{tickets.length !== 1 ? 's' : ''}</p>
+                    {!canCreate && (
+                        <p className="text-xs text-amber-700 mt-1">
+                            {currentUser?.role === 'STAFF'
+                                ? 'Read-only access. Staff can view tickets only.'
+                                : 'Ticket creation is technician-only.'}
+                        </p>
+                    )}
                 </div>
-                <button
-                    onClick={() => setShowCreate(true)}
-                    className="inline-flex items-center gap-2 px-4 py-2.5 bg-campus-500 text-white text-sm font-semibold rounded-xl hover:bg-campus-600 transition-colors shadow-sm"
-                >
-                    <TicketPlus className="w-4 h-4" /> New Ticket
-                </button>
+                {canCreate && (
+                    <button
+                        onClick={() => setShowCreate(true)}
+                        className="inline-flex items-center gap-2 px-4 py-2.5 bg-campus-500 text-white text-sm font-semibold rounded-xl hover:bg-campus-600 transition-colors shadow-sm"
+                    >
+                        <TicketPlus className="w-4 h-4" /> New Ticket
+                    </button>
+                )}
             </div>
+
+            {pageError && (
+                <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                    {pageError}
+                </div>
+            )}
 
             {/* Filters */}
             <div className="flex items-center gap-3 flex-wrap">
@@ -131,8 +155,16 @@ export default function TicketsPage() {
                                 <TicketRow
                                     key={t.id}
                                     ticket={t}
-                                    onStatusChange={(status) => updateStatus.mutate({ id: t.id, status })}
-                                    onDelete={() => { if (confirm('Delete this ticket?')) deleteMut.mutate(t.id) }}
+                                    canEdit={canEdit}
+                                    canDelete={canDelete}
+                                    onStatusChange={(status) => {
+                                        setPageError(null)
+                                        updateStatus.mutate({ id: t.id, status })
+                                    }}
+                                    onDelete={() => {
+                                        setPageError(null)
+                                        if (confirm('Delete this ticket?')) deleteMut.mutate(t.id)
+                                    }}
                                 />
                             ))}
                         </tbody>
@@ -141,15 +173,17 @@ export default function TicketsPage() {
             )}
 
             {/* Create Ticket Modal */}
-            {showCreate && <CreateTicketModal onClose={() => setShowCreate(false)} />}
+            {showCreate && canCreate && <CreateTicketModal onClose={() => setShowCreate(false)} />}
         </div>
     )
 }
 
 // ──────── Ticket Row ────────
 
-function TicketRow({ ticket: t, onStatusChange, onDelete }: {
+function TicketRow({ ticket: t, canEdit, canDelete, onStatusChange, onDelete }: {
     ticket: Ticket
+    canEdit: boolean
+    canDelete: boolean
     onStatusChange: (s: TicketStatus) => void
     onDelete: () => void
 }) {
@@ -162,14 +196,21 @@ function TicketRow({ ticket: t, onStatusChange, onDelete }: {
     return (
         <tr className="hover:bg-gray-50/50 transition-colors">
             <td className="px-5 py-3">
-                <button
-                    onClick={() => onStatusChange(nextStatus[t.status])}
-                    className="inline-flex items-center gap-1.5 text-xs font-medium hover:opacity-70 transition-opacity"
-                    title={`Click to change to ${statusLabel[nextStatus[t.status]]}`}
-                >
-                    {statusIcon[t.status]}
-                    <span>{statusLabel[t.status]}</span>
-                </button>
+                {canEdit ? (
+                    <button
+                        onClick={() => onStatusChange(nextStatus[t.status])}
+                        className="inline-flex items-center gap-1.5 text-xs font-medium hover:opacity-70 transition-opacity"
+                        title={`Click to change to ${statusLabel[nextStatus[t.status]]}`}
+                    >
+                        {statusIcon[t.status]}
+                        <span>{statusLabel[t.status]}</span>
+                    </button>
+                ) : (
+                    <span className="inline-flex items-center gap-1.5 text-xs font-medium">
+                        {statusIcon[t.status]}
+                        <span>{statusLabel[t.status]}</span>
+                    </span>
+                )}
             </td>
             <td className="px-5 py-3">
                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${priorityBadge[t.priority]}`}>
@@ -196,9 +237,13 @@ function TicketRow({ ticket: t, onStatusChange, onDelete }: {
                 </span>
             </td>
             <td className="px-5 py-3 text-right">
-                <button onClick={onDelete} className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors">
-                    <Trash2 className="w-3.5 h-3.5" />
-                </button>
+                {canDelete ? (
+                    <button onClick={onDelete} className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors">
+                        <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                ) : (
+                    <span className="inline-block w-6" />
+                )}
             </td>
         </tr>
     )
@@ -228,7 +273,7 @@ function CreateTicketModal({ onClose }: { onClose: () => void }) {
             queryClient.invalidateQueries({ queryKey: ['rooms'] })
             onClose()
         },
-        onError: (err: any) => setError(err?.response?.data?.message || 'Failed to create ticket'),
+        onError: (err: any) => setError(err?.response?.data?.error || err?.response?.data?.message || 'Failed to create ticket'),
     })
 
     const handleSubmit = (e: React.FormEvent) => {
